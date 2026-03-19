@@ -5,7 +5,6 @@ on:
   push:
     branches: [ main, master ]
 
-# Force JavaScript actions to run on Node.js 24 now (future-proof the runner).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -20,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java (Temurin 17) for Gradle/AGP
+      - name: Set up Java (Temurin 17)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,37 +28,26 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'   # stable; bump anytime
+          flutter-version: '3.19.0'
           channel: 'stable'
           cache: true
 
-      - name: Flutter doctor (sanity)
+      - name: Flutter doctor
         run: flutter doctor -v
 
-      # ---- Create a clean, supported Android/Gradle project and migrate your code into it ----
       - name: Create clean Flutter scaffold
         run: |
           rm -rf tmp_scaffold
           flutter create -t app tmp_scaffold --platforms=android
-          # Copy Dart, assets, pubspec into scaffold
           rsync -av --delete lib/ tmp_scaffold/lib/ || true
           if [ -d "assets" ]; then rsync -av assets/ tmp_scaffold/assets/; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml tmp_scaffold/pubspec.yaml; fi
 
-      - name: Pub get (inside scaffold)
+      - name: Pub get
         working-directory: tmp_scaffold
         run: flutter pub get
 
-      # Optional diagnostics if it fails again:
-      # - name: Print pubspec and Android gradle files
-      #   working-directory: tmp_scaffold
-      #   run: |
-      #     echo "----- pubspec.yaml -----"; cat pubspec.yaml
-      #     echo "----- gradle-wrapper.properties -----"; cat android/gradle/wrapper/gradle-wrapper.properties
-      #     echo "----- build.gradle (project) -----"; sed -n '1,200p' android/build.gradle
-      #     echo "----- app/build.gradle -----"; sed -n '1,200p' android/app/build.gradle
-
-      - name: Build debug APK (unsigned)
+      - name: Build debug APK
         working-directory: tmp_scaffold
         run: flutter build apk --debug --verbose
 
@@ -68,39 +56,3 @@ jobs:
         with:
           name: app-debug-apk
           path: tmp_scaffold/build/app/outputs/flutter-apk/app-debug.apk
-
-      # ---------------- (Optional) Release-signed build ----------------
-      # To enable: add repo Secrets:
-      #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
-      # then uncomment the steps below.
-      #
-      # - name: Decode Android keystore
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   working-directory: tmp_scaffold
-      #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/wa-offshore.keystore
-      #
-      # - name: Configure signing for release
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   working-directory: tmp_scaffold
-      #   run: |
-      #     sed -i '/android {/a \
-      #     signingConfigs { release { storeFile file("wa-offshore.keystore"); storePassword System.getenv("KEYSTORE_PWD"); keyAlias System.getenv("KEY_ALIAS"); keyPassword System.getenv("KEY_PWD"); } } \
-      #     ' android/app/build.gradle
-      #     sed -i '/buildTypes {/,/}/ s/release {/&\
-      #             signingConfig signingConfigs.release/' android/app/build.gradle
-      #
-      # - name: Build release APK (signed)
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   working-directory: tmp_scaffold
-      #   env:
-      #     KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      #     KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      #     KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      #   run: flutter build apk --release
-      #
-      # - name: Upload release APK
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: app-release-apk
-      #     path: tmp_scaffold/build/app/outputs/flutter-apk/app-release.apk
