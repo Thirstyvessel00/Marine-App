@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # Quick unsigned build for testing/sideloading
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+      # ---- Release-signed build (optional; enable once keystore secrets are set) ----
+      # - name: Decode Android keystore
+      #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/wa-offshore.keystore
+      #   env:
+      #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      #
+      # - name: Configure signing in build.gradle (release)
+      #   run: |
+      #     sed -i '/android {/a \
+      #     signingConfigs { release { storeFile file("wa-offshore.keystore"); storePassword System.getenv("KEYSTORE_PWD"); keyAlias System.getenv("KEY_ALIAS"); keyPassword System.getenv("KEY_PWD"); } } \
+      #     ' android/app/build.gradle
+      #     sed -i '/buildTypes {/,/}/ s/release {/&\
+      #             signingConfig signingConfigs.release/' android/app/build.gradle
+      #
+      # - name: Build release APK
+      #   env:
+      #     KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      #     KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      #     KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      #   run: flutter build apk --release
+      #
+      # - name: Upload release artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: app-release-apk
+      #     path: build/app/outputs/flutter-apk/app-release.apk
