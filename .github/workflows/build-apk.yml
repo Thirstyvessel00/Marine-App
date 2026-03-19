@@ -5,8 +5,12 @@ on:
   push:
     branches: [ main, master ]
 
+# Force JavaScript actions to run on Node.js 24 now (future-proof the runner).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -16,37 +20,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java (Temurin 17)
+      - name: Set up Java (Temurin 17) for Gradle/AGP
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'
+          flutter-version: '3.19.0'   # stable; bump anytime
           channel: 'stable'
           cache: true
 
+      - name: Flutter doctor (sanity)
+        run: flutter doctor -v
+
+      # ---- Create a clean, supported Android/Gradle project and migrate your code into it ----
       - name: Create clean Flutter scaffold
         run: |
           rm -rf tmp_scaffold
           flutter create -t app tmp_scaffold --platforms=android
-          # Copy your Dart code and pubspec into the scaffold
+          # Copy Dart, assets, pubspec into scaffold
           rsync -av --delete lib/ tmp_scaffold/lib/ || true
           if [ -d "assets" ]; then rsync -av assets/ tmp_scaffold/assets/; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml tmp_scaffold/pubspec.yaml; fi
-          # Move into scaffold for build
-          echo "DONE"
 
       - name: Pub get (inside scaffold)
         working-directory: tmp_scaffold
         run: flutter pub get
 
-      - name: Build debug APK
+      # Optional diagnostics if it fails again:
+      # - name: Print pubspec and Android gradle files
+      #   working-directory: tmp_scaffold
+      #   run: |
+      #     echo "----- pubspec.yaml -----"; cat pubspec.yaml
+      #     echo "----- gradle-wrapper.properties -----"; cat android/gradle/wrapper/gradle-wrapper.properties
+      #     echo "----- build.gradle (project) -----"; sed -n '1,200p' android/build.gradle
+      #     echo "----- app/build.gradle -----"; sed -n '1,200p' android/app/build.gradle
+
+      - name: Build debug APK (unsigned)
         working-directory: tmp_scaffold
-        run: flutter build apk --debug
+        run: flutter build apk --debug --verbose
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -54,14 +69,18 @@ jobs:
           name: app-debug-apk
           path: tmp_scaffold/build/app/outputs/flutter-apk/app-debug.apk
 
-      # ----- (optional) release-signed build: add keystore secrets, then uncomment -----
+      # ---------------- (Optional) Release-signed build ----------------
+      # To enable: add repo Secrets:
+      #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+      # then uncomment the steps below.
+      #
       # - name: Decode Android keystore
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   working-directory: tmp_scaffold
       #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/wa-offshore.keystore
-      #   env:
-      #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       #
-      # - name: Configure signing
+      # - name: Configure signing for release
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   working-directory: tmp_scaffold
       #   run: |
       #     sed -i '/android {/a \
@@ -70,7 +89,8 @@ jobs:
       #     sed -i '/buildTypes {/,/}/ s/release {/&\
       #             signingConfig signingConfigs.release/' android/app/build.gradle
       #
-      # - name: Build release APK
+      # - name: Build release APK (signed)
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   working-directory: tmp_scaffold
       #   env:
       #     KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -79,6 +99,7 @@ jobs:
       #   run: flutter build apk --release
       #
       # - name: Upload release APK
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: app-release-apk
