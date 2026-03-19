@@ -5,6 +5,10 @@ on:
   push:
     branches: [ main, master ]
 
+# Opt into Node.js 24 for all JavaScript-based actions used in this workflow.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,17 +17,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Java (Temurin 17) for Android/Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Pin a stable; you can bump to the latest stable at any time.
           flutter-version: '3.19.0'
           channel: 'stable'
+          cache: true
 
-      - name: Flutter pub get
+      - name: Flutter doctor (sanity check)
+        run: flutter doctor -v
+
+      - name: Get packages
         run: flutter pub get
 
-      # Quick unsigned build for testing/sideloading
-      - name: Build debug APK
+      # Optional: run static analysis and tests if you have them
+      # - name: Analyze
+      #   run: flutter analyze
+      # - name: Test
+      #   run: flutter test --no-pub
+
+      - name: Build debug APK (unsigned)
         run: flutter build apk --debug
 
       - name: Upload debug artifact
@@ -32,13 +52,13 @@ jobs:
           name: app-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
 
-      # ---- Release-signed build (optional; enable once keystore secrets are set) ----
+      # -------- OPTIONAL: Release-signed build (enable when you have a keystore) --------
       # - name: Decode Android keystore
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/wa-offshore.keystore
-      #   env:
-      #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       #
-      # - name: Configure signing in build.gradle (release)
+      # - name: Configure signing for release
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   run: |
       #     sed -i '/android {/a \
       #     signingConfigs { release { storeFile file("wa-offshore.keystore"); storePassword System.getenv("KEYSTORE_PWD"); keyAlias System.getenv("KEY_ALIAS"); keyPassword System.getenv("KEY_PWD"); } } \
@@ -46,7 +66,8 @@ jobs:
       #     sed -i '/buildTypes {/,/}/ s/release {/&\
       #             signingConfig signingConfigs.release/' android/app/build.gradle
       #
-      # - name: Build release APK
+      # - name: Build release APK (signed)
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   env:
       #     KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       #     KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -54,6 +75,7 @@ jobs:
       #   run: flutter build apk --release
       #
       # - name: Upload release artifact
+      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: app-release-apk
