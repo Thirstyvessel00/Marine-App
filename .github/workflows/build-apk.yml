@@ -1,11 +1,10 @@
-name: Build Android APK
+name: Build Android APK (scaffold + migrate)
 
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
 
-# Opt into Node.js 24 for all JavaScript-based actions used in this workflow.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -17,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java (Temurin 17) for Android/Gradle
+      - name: Set up Java (Temurin 17)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -26,39 +25,44 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          # Pin a stable; you can bump to the latest stable at any time.
           flutter-version: '3.19.0'
           channel: 'stable'
           cache: true
 
-      - name: Flutter doctor (sanity check)
-        run: flutter doctor -v
+      - name: Create clean Flutter scaffold
+        run: |
+          rm -rf tmp_scaffold
+          flutter create -t app tmp_scaffold --platforms=android
+          # Copy your Dart code and pubspec into the scaffold
+          rsync -av --delete lib/ tmp_scaffold/lib/ || true
+          if [ -d "assets" ]; then rsync -av assets/ tmp_scaffold/assets/; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml tmp_scaffold/pubspec.yaml; fi
+          # Move into scaffold for build
+          echo "DONE"
 
-      - name: Get packages
+      - name: Pub get (inside scaffold)
+        working-directory: tmp_scaffold
         run: flutter pub get
 
-      # Optional: run static analysis and tests if you have them
-      # - name: Analyze
-      #   run: flutter analyze
-      # - name: Test
-      #   run: flutter test --no-pub
-
-      - name: Build debug APK (unsigned)
+      - name: Build debug APK
+        working-directory: tmp_scaffold
         run: flutter build apk --debug
 
-      - name: Upload debug artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: tmp_scaffold/build/app/outputs/flutter-apk/app-debug.apk
 
-      # -------- OPTIONAL: Release-signed build (enable when you have a keystore) --------
+      # ----- (optional) release-signed build: add keystore secrets, then uncomment -----
       # - name: Decode Android keystore
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      #   working-directory: tmp_scaffold
       #   run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/wa-offshore.keystore
+      #   env:
+      #     ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       #
-      # - name: Configure signing for release
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # - name: Configure signing
+      #   working-directory: tmp_scaffold
       #   run: |
       #     sed -i '/android {/a \
       #     signingConfigs { release { storeFile file("wa-offshore.keystore"); storePassword System.getenv("KEYSTORE_PWD"); keyAlias System.getenv("KEY_ALIAS"); keyPassword System.getenv("KEY_PWD"); } } \
@@ -66,17 +70,16 @@ jobs:
       #     sed -i '/buildTypes {/,/}/ s/release {/&\
       #             signingConfig signingConfigs.release/' android/app/build.gradle
       #
-      # - name: Build release APK (signed)
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # - name: Build release APK
+      #   working-directory: tmp_scaffold
       #   env:
       #     KEYSTORE_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       #     KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       #     KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       #   run: flutter build apk --release
       #
-      # - name: Upload release artifact
-      #   if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # - name: Upload release APK
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: app-release-apk
-      #     path: build/app/outputs/flutter-apk/app-release.apk
+      #     path: tmp_scaffold/build/app/outputs/flutter-apk/app-release.apk
