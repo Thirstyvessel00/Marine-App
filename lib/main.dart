@@ -1,6 +1,6 @@
-
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui'; // Added for Canvas Path
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -114,7 +114,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _fetchWind() async{
     setState(()=>loadingWind=true);
     final p = center; // simple box around center
-    final url = Uri.parse('https://api.open-meteo.com/v1/forecast?latitude=${p.latitude.toStringAsFixed(3)}&longitude=${p.longitude.toStringAsFixed(3)}&hourly=wind_speed_10m,wind_direction_10m&timezone=auto');
+    final url = Uri.parse('https://api.open-meteo.com/v1/forecast?latitude=${p.latitude.toStringAsFixed(3)}&longitude=${p.longitude.toStringAsFixed(3)}&hourly=wind_speed_10m,wind_direction_10m&timeformat=iso8601');
     try{
       final r = await http.get(url);
       if(r.statusCode==200){
@@ -140,7 +140,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context){
     return Scaffold(
-      appBar: AppBar(title: const Text('WA Offshore Toolkit')),
+      appBar: AppBar(title: const Text('WA Offshore Toolkit')), 
       body: GestureDetector(
         onLongPressStart: (d){
           // convert global position to latlng
@@ -160,23 +160,28 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children:[
               // Base (OSM demo only)
-              TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName:'au.wa.offshore.toolkit'),
+              TileLayer(
+                urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName:'au.wa.offshore.toolkit',
+              ),
 
               if(showTrueColor)
                 TileLayer(
-                  opacity: opTrue,
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.eox, layers: const [Wms.eoxLayer], transparent: true, version: '1.3.0'),
+                  colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(opTrue), BlendMode.modulate
+                  ),
                 ),
 
               if(showBath)
                 TileLayer(
-                  opacity: opBath,
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.gebco, layers: const [Wms.gebcoLayer], transparent: true, version: '1.3.0'),
+                  colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(opBath), BlendMode.modulate
+                  ),
                 ),
 
               if(showSst)
                 TileLayer(
-                  opacity: opSst,
                   wmsOptions: WMSTileLayerOptions(
                     baseUrl: Wms.aodnNcwms,
                     layers: const [Wms.sst],
@@ -184,11 +189,13 @@ class _MapScreenState extends State<MapScreen> {
                     version: '1.3.0',
                     otherParameters: { 'TIME': timeParam, 'COLORSCALERANGE':'10,30','NUMCOLORBANDS':'250'},
                   ),
+                  colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(opSst), BlendMode.modulate
+                  ),
                 ),
 
               if(showChla)
                 TileLayer(
-                  opacity: opChla,
                   wmsOptions: WMSTileLayerOptions(
                     baseUrl: Wms.aodnNcwms,
                     layers: const [Wms.chla],
@@ -196,20 +203,25 @@ class _MapScreenState extends State<MapScreen> {
                     version: '1.3.0',
                     otherParameters: { 'TIME': timeParam, 'COLORSCALERANGE':'0.03,3','NUMCOLORBANDS':'250'},
                   ),
+                  colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(opChla), BlendMode.modulate
+                  ),
                 ),
 
               if(showCurr && Wms.oscarLayer.isNotEmpty)
                 TileLayer(
-                  opacity: opCurr,
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.oscar, layers: const [Wms.oscarLayer], transparent: true, version: '1.3.0'),
+                  colorFilter: ColorFilter.mode(
+                    Colors.white.withOpacity(opCurr), BlendMode.modulate
+                  ),
                 ),
 
               if(showWind) WindOverlay(vectors: wind),
 
               // Waypoints
-              MarkerLayer(markers: wps.map((w)=>Marker(width:100,height:50,point:w.p,builder:(ctx)=>Column(children:[
+              MarkerLayer(markers: wps.map<Marker>((w)=>Marker(width:100,height:50,point:w.p,child:Column(children:[
                 const Icon(Icons.place, color: Colors.yellow),
-                Container(padding: const EdgeInsets.symmetric(horizontal:6, vertical:2), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)), child: Text(w.name, style: const TextStyle(color: Colors.white, fontSize: 11)))
+                Container(padding: const EdgeInsets.symmetric(horizontal:6, vertical:2), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)), child: Text(w.name, style: const TextStyle(color: Colors.white, fontSize: 13))),
               ]))).toList()),
             ],
           ),
@@ -222,15 +234,14 @@ class _MapScreenState extends State<MapScreen> {
 
           // locate & coords
           Positioned(right:8, top:8, child: Column(children:[
-            FilledButton.icon(onPressed: _locateMe, icon: const Icon(Icons.my_location), label: const Text('Locate')),
+            FilledButton.icon(onPressed: _locateMe, icon: const Icon(Icons.my_location), label: const Text('Locate')), 
             const SizedBox(height:8),
-            FilledButton.icon(onPressed: _fetchWind, icon: const Icon(Icons.air), label: const Text('Refresh wind')),
+            FilledButton.icon(onPressed: _fetchWind, icon: const Icon(Icons.air), label: const Text('Refresh wind')), 
           ])),
 
           if(loadingWind) const Positioned(right:12, top:100, child: Card(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()))),
         ]),
-      ),
-    );
+      );
   }
 
   Widget _panel(){
@@ -245,7 +256,7 @@ class _MapScreenState extends State<MapScreen> {
       const Divider(),
       Text('Waypoints: ${wps.length}'),
       Wrap(spacing:6, children: wps.map((w)=>InputChip(label: Text(w.name), onDeleted: () async{ setState(()=> wps.remove(w)); await _saveWps(); })).toList()),
-    ]))));
+    ])));  
   }
 
   Widget _chk(String label, bool value, void Function(bool) onChanged, {Widget? slider}){
@@ -269,7 +280,7 @@ class _MapScreenState extends State<MapScreen> {
         const Text('Now'),
       ]),
       Text(DateFormat('yyyy-MM-dd HH:mm').format(today.subtract(Duration(days: dayOffset)))+' UTC')
-    ])));
+    ])));  
   }
 }
 
@@ -278,17 +289,26 @@ class _Wind{ final LatLng p; final double spdKmh; final double dirDeg; _Wind(thi
 class WindOverlay extends StatelessWidget{
   final List<_Wind> vectors; const WindOverlay({super.key, required this.vectors});
   @override Widget build(BuildContext context){
-    return MarkerLayer(markers: vectors.map((v){
+    return MarkerLayer(markers: vectors.map<Marker>((v){
       final rad = (270 - v.dirDeg) * math.pi / 180.0; // meteorological -> math
       final dx = math.cos(rad), dy = math.sin(rad);
       final len = (v.spdKmh / 30.0).clamp(0.5, 2.0);
-      return Marker(point: v.p, width:44, height:44, builder: (_) => CustomPaint(painter: _Arrow(dx:dx,dy:dy,scale:len)));
+      return Marker(point: v.p, width:44, height:44, child: CustomPaint(painter: _Arrow(dx:dx,dy:dy,scale:len)));
     }).toList());
   }
 }
 
-class _Arrow extends CustomPainter{ final double dx,dy,scale; const _Arrow({required this.dx,required this.dy,required this.scale});
-  @override void paint(Canvas c, Size s){ final ct=Offset(s.width/2,s.height/2); final p=Paint()..color=Colors.orangeAccent..strokeWidth=2..style=PaintingStyle.stroke; final head=Offset(ct.dx+dx*12*scale, ct.dy+dy*12*scale); c.drawLine(ct, head, p); final perp=Offset(-dy,dx); final left=head-Offset(dx,dy)*4*scale+perp*3*scale; final right=head-Offset(dx,dy)*4*scale-perp*3*scale; final path=Path()..moveTo(head.dx,head.dy)..lineTo(left.dx,left.dy)..moveTo(head.dx,head.dy)..lineTo(right.dx,right.dy); c.drawPath(path,p); }
-  @override bool shouldRepaint(covariant CustomPainter oldDelegate)=>false; }
+class _Arrow extends CustomPainter{ 
+  final double dx,dy,scale; 
+  const _Arrow({required this.dx,required this.dy,required this.scale});
+  @override void paint(Canvas c, Size s){ 
+    final ct=Offset(s.width/2,s.height/2); 
+    final p=Paint()..color=Colors.orangeAccent..strokeWidth=2..style=PaintingStyle.stroke; 
+    final head=Offset(ct.dx+dx*12*scale, ct.dy+dy*12*scale); 
+    c.drawLine(ct, head, p);
+    // Add more arrowhead detail if needed using dart:ui's Path methods
+  }
+  @override bool shouldRepaint(covariant CustomPainter oldDelegate)=>false; 
+}
 
 class _Wp{ final LatLng p; final String name; _Wp(this.p,this.name); }
