@@ -167,7 +167,6 @@ class _MapScreenState extends State<MapScreen> {
               if(showTrueColor)
                 TileLayer(
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.eox, layers: const [Wms.eoxLayer], transparent: true, version: '1.3.0'),
-                  colorFilter: ColorFilter.mode(
                     Colors.white.withOpacity(opTrue), BlendMode.modulate
                   ),
                 ),
@@ -175,7 +174,6 @@ class _MapScreenState extends State<MapScreen> {
               if(showBath)
                 TileLayer(
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.gebco, layers: const [Wms.gebcoLayer], transparent: true, version: '1.3.0'),
-                  colorFilter: ColorFilter.mode(
                     Colors.white.withOpacity(opBath), BlendMode.modulate
                   ),
                 ),
@@ -189,7 +187,6 @@ class _MapScreenState extends State<MapScreen> {
                     version: '1.3.0',
                     otherParameters: { 'TIME': timeParam, 'COLORSCALERANGE':'10,30','NUMCOLORBANDS':'250'},
                   ),
-                  colorFilter: ColorFilter.mode(
                     Colors.white.withOpacity(opSst), BlendMode.modulate
                   ),
                 ),
@@ -203,7 +200,6 @@ class _MapScreenState extends State<MapScreen> {
                     version: '1.3.0',
                     otherParameters: { 'TIME': timeParam, 'COLORSCALERANGE':'0.03,3','NUMCOLORBANDS':'250'},
                   ),
-                  colorFilter: ColorFilter.mode(
                     Colors.white.withOpacity(opChla), BlendMode.modulate
                   ),
                 ),
@@ -211,7 +207,6 @@ class _MapScreenState extends State<MapScreen> {
               if(showCurr && Wms.oscarLayer.isNotEmpty)
                 TileLayer(
                   wmsOptions: WMSTileLayerOptions(baseUrl: Wms.oscar, layers: const [Wms.oscarLayer], transparent: true, version: '1.3.0'),
-                  colorFilter: ColorFilter.mode(
                     Colors.white.withOpacity(opCurr), BlendMode.modulate
                   ),
                 ),
